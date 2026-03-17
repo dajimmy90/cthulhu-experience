@@ -2,13 +2,13 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Abyssal Perception — Terror Cósmico Interactivo</title>
     <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Lora:ital@0;1&display=swap" rel="stylesheet">
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{background:#000;color:#888;font-family:'Special Elite',monospace;overflow:hidden;height:100vh;cursor:none;user-select:none}
+        body{background:#000;color:#888;font-family:'Special Elite',monospace;overflow:hidden;height:100vh;height:100dvh;cursor:none;user-select:none;touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;overscroll-behavior:none}
         #cur{position:fixed;width:22px;height:22px;border:1.5px solid rgba(255,240,220,.7);border-radius:50%;pointer-events:none;z-index:9999;transition:transform .12s,border-color .2s;animation:curFlicker 0.12s infinite}
         #cur::after{content:'';position:absolute;top:50%;left:50%;width:4px;height:4px;background:rgba(255,240,220,.6);border-radius:50%;transform:translate(-50%,-50%);animation:curDot .08s infinite alternate}
         @keyframes curFlicker{0%{opacity:1;border-color:rgba(255,240,220,.8)}15%{opacity:.2;border-color:rgba(180,50,40,.4)}30%{opacity:.9;border-color:rgba(255,240,220,.6)}50%{opacity:.05;border-color:rgba(120,80,60,.3)}65%{opacity:1;border-color:rgba(255,250,240,.7)}80%{opacity:.4;border-color:rgba(200,60,40,.5)}100%{opacity:.85;border-color:rgba(255,240,220,.7)}}
@@ -27,8 +27,8 @@
         .itext{max-width:520px;text-align:center;padding:0 20px;margin-bottom:50px}
         .itext p{font-family:'Lora',serif;font-size:13px;line-height:2;color:#333;margin-bottom:14px}
         .itext em{color:#777;font-style:normal;letter-spacing:2px}
-        .ibtn{background:0;border:1px solid #222;color:#666;font-family:inherit;font-size:13px;letter-spacing:5px;padding:16px 50px;cursor:none;text-transform:uppercase;transition:.5s}
-        .ibtn:hover{border-color:#555;color:#aaa}
+        .ibtn{background:0;border:1px solid #222;color:#666;font-family:inherit;font-size:13px;letter-spacing:5px;padding:16px 50px;cursor:pointer;text-transform:uppercase;transition:.5s;-webkit-tap-highlight-color:transparent;min-height:48px}
+        .ibtn:hover,.ibtn:active{border-color:#555;color:#aaa}
         .iload{font-size:10px;color:#222;margin-top:20px;letter-spacing:2px}
 
         #main{position:fixed;inset:0;display:none}
@@ -1019,40 +1019,106 @@ async function nextLevel() {
 // INPUT
 // ═══════════════════════════════════════════════════════════════
 
-document.addEventListener('mousemove',e=>{
-    S.px=S.mx;S.py=S.my;S.mx=e.clientX;S.my=e.clientY;
-    S.vx=S.mx-S.px;S.vy=S.my-S.py;
-    cur.style.left=(e.clientX-11)+'px';cur.style.top=(e.clientY-11)+'px';
-    if(S.dig&&S.run){
-        const sp=Math.sqrt(S.vx**2+S.vy**2);
-        erode(S.mx,S.my,80+sp*2,.04+sp*.005);
-        smudge(S.mx,S.my,S.vx,S.vy,80+sp,0.3+sp*0.02);
+// ─── Detect touch device ───
+const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+const TOUCH_RADIUS = 120; // bigger radius for fingers
+const MOUSE_RADIUS = 80;
+
+function resumeAudio() {
+    if (AC && AC.state === 'suspended') AC.resume();
+}
+
+function moveCursor(x, y) {
+    cur.style.left = (x - 11) + 'px';
+    cur.style.top = (y - 11) + 'px';
+}
+
+function handleMove(x, y) {
+    S.px = S.mx; S.py = S.my;
+    S.mx = x; S.my = y;
+    S.vx = S.mx - S.px; S.vy = S.my - S.py;
+    moveCursor(x, y);
+    if (S.dig && S.run) {
+        const sp = Math.sqrt(S.vx ** 2 + S.vy ** 2);
+        const r = isTouch ? TOUCH_RADIUS : MOUSE_RADIUS;
+        erode(S.mx, S.my, r + sp * 2, .05 + sp * .006);
+        smudge(S.mx, S.my, S.vx, S.vy, r + sp, .35 + sp * .025);
     }
-});
+}
 
-cv.addEventListener('mousedown',e=>{S.dig=true;cur.classList.add('dig');triggerClickPing();e.preventDefault()});
-document.addEventListener('mouseup',()=>{S.dig=false;cur.classList.remove('dig')});
-cv.addEventListener('contextmenu',e=>e.preventDefault());
+function handleDown(x, y) {
+    resumeAudio();
+    S.dig = true;
+    S.mx = x; S.my = y;
+    cur.classList.add('dig');
+    triggerClickPing();
+}
 
-cv.addEventListener('click',()=>{
-    if(!S.run||S.sigil.found)return;
-    const en=eroNearSigil();
-    const d=Math.sqrt((S.mx-S.sigil.x)**2+(S.my-S.sigil.y)**2);
-    if(en>.5&&d<S.sigil.r*3) nextLevel();
-    else{triggerImpact();S.shake=Math.min(1,S.shake+.3);}
-});
+function handleUp() {
+    S.dig = false;
+    cur.classList.remove('dig');
+}
 
-document.addEventListener('touchstart',e=>{S.dig=true;cur.classList.add('dig');const t=e.touches[0];S.mx=t.clientX;S.my=t.clientY;triggerClickPing();},{passive:true});
-document.addEventListener('touchmove',e=>{
-    e.preventDefault();const t=e.touches[0];S.px=S.mx;S.py=S.my;S.mx=t.clientX;S.my=t.clientY;S.vx=S.mx-S.px;S.vy=S.my-S.py;
-    if(S.dig&&S.run){const sp=Math.sqrt(S.vx**2+S.vy**2);erode(S.mx,S.my,80+sp*2,.04+sp*.005);smudge(S.mx,S.my,S.vx,S.vy,80+sp,.3+sp*.02);}
-},{passive:false});
-document.addEventListener('touchend',()=>{
-    S.dig=false;cur.classList.remove('dig');
-    if(!S.run||S.sigil.found)return;
-    const en=eroNearSigil(),d=Math.sqrt((S.mx-S.sigil.x)**2+(S.my-S.sigil.y)**2);
-    if(en>.5&&d<S.sigil.r*3)nextLevel();else{triggerImpact();S.shake=Math.min(1,S.shake+.3);}
-});
+function handleTap() {
+    if (!S.run || S.sigil.found) return;
+    const en = eroNearSigil();
+    const d = Math.sqrt((S.mx - S.sigil.x) ** 2 + (S.my - S.sigil.y) ** 2);
+    const touchR = isTouch ? S.sigil.r * 5 : S.sigil.r * 3;
+    if (en > .4 && d < touchR) nextLevel();
+    else { triggerImpact(); S.shake = Math.min(1, S.shake + .3); }
+}
+
+// ─── Mouse events ───
+document.addEventListener('mousemove', e => handleMove(e.clientX, e.clientY));
+cv.addEventListener('mousedown', e => { handleDown(e.clientX, e.clientY); e.preventDefault(); });
+document.addEventListener('mouseup', handleUp);
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('click', handleTap);
+
+// ─── Touch events (prevent ALL default to avoid scroll/zoom/pull-to-refresh) ───
+let touchTapStart = 0;
+let touchMoved = false;
+
+document.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    handleDown(t.clientX, t.clientY);
+    touchTapStart = performance.now();
+    touchMoved = false;
+}, { passive: false });
+
+document.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const t = e.touches[0];
+    handleMove(t.clientX, t.clientY);
+    touchMoved = true;
+}, { passive: false });
+
+document.addEventListener('touchend', e => {
+    e.preventDefault();
+    handleUp();
+    // Short tap (< 300ms, minimal movement) = tap to check sigil
+    const elapsed = performance.now() - touchTapStart;
+    if (elapsed < 300 && !touchMoved) handleTap();
+    // Long press that moved = dig + impact feedback
+    else if (touchMoved) { triggerImpact(); S.shake = Math.min(1, S.shake + .15); }
+}, { passive: false });
+
+// ─── Multi-touch: pinch = extra distortion burst ───
+document.addEventListener('touchstart', e => {
+    if (e.touches.length >= 2) {
+        resumeAudio();
+        S.shake = Math.min(1, S.shake + .5);
+        triggerImpact();
+        // Erode a large area between the two fingers
+        const t1 = e.touches[0], t2 = e.touches[1];
+        const mx = (t1.clientX + t2.clientX) / 2;
+        const my = (t1.clientY + t2.clientY) / 2;
+        const dist = Math.sqrt((t1.clientX - t2.clientX) ** 2 + (t1.clientY - t2.clientY) ** 2);
+        erode(mx, my, dist * .6, .15);
+        smudge(mx, my, (t2.clientX - t1.clientX) * .5, (t2.clientY - t1.clientY) * .5, dist * .5, .6);
+    }
+}, { passive: false });
 
 // ═══════════════════════════════════════════════════════════════
 // RENDER LOOP
@@ -1125,20 +1191,37 @@ window.addEventListener('load', async ()=>{
     }
 });
 
-document.getElementById('enterBtn').addEventListener('click', async ()=>{
-    initAudio();
-    try{await initCam();}catch(e){S.cam=false;}
+async function startExperience() {
+    // Prevent double start
+    if (S.run) return;
 
-    S.lvl=0; S.seed=Date.now()%99999;
-    S.scene=generateScene(0);
+    initAudio();
+    // Force resume on mobile (must happen in user gesture handler)
+    if (AC && AC.state === 'suspended') await AC.resume();
+
+    try { await initCam(); } catch(e) { S.cam = false; }
+
+    S.lvl = 0; S.seed = Date.now() % 99999;
+    S.scene = generateScene(0);
     initSmudge(); initErosion();
-    S.sigil={x:S.scene.sigilN.x*cv.width,y:S.scene.sigilN.y*cv.height,r:45,found:false};
+    S.sigil = { x: S.scene.sigilN.x * cv.width, y: S.scene.sigilN.y * cv.height, r: isTouch ? 55 : 45, found: false };
 
     document.getElementById('intro').classList.add('out');
     document.getElementById('main').classList.add('on');
-    setTimeout(()=>document.getElementById('intro').style.display='none',2000);
+    setTimeout(() => document.getElementById('intro').style.display = 'none', 2000);
 
-    S.run=true; render(); nextLevel();
+    // Hide custom cursor on touch devices (finger is the cursor)
+    if (isTouch) cur.style.display = 'none';
+
+    S.run = true; render(); nextLevel();
+}
+
+// Both click AND touchend to cover all devices
+document.getElementById('enterBtn').addEventListener('click', startExperience);
+document.getElementById('enterBtn').addEventListener('touchend', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    startExperience();
 });
 
 </script>
