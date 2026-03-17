@@ -366,9 +366,34 @@ let dlNode, dlFb;            // delay exposed for modulation
 let vbO, vbG;                // vibrato exposed for modulation
 // Smoothed audio metrics
 let aSmooth = { sp: 0, eroLocal: 0, eroTotal: 0, acc: 0 };
+let audioUnlocked = false;
+
+// ─── iOS/Safari audio unlock ───
+// Must play a real buffer inside a user gesture to unlock WebAudio
+async function unlockAudioiOS() {
+    if (!AC) return;
+    if (AC.state === 'suspended') {
+        try { await AC.resume(); } catch(e) {}
+    }
+    // Play a tiny silent buffer — this is the iOS unlock trick
+    try {
+        const silentBuf = AC.createBuffer(1, 1, AC.sampleRate);
+        const src = AC.createBufferSource();
+        src.buffer = silentBuf;
+        src.connect(AC.destination);
+        src.start(0);
+        src.onended = () => { audioUnlocked = true; };
+        // Also schedule a gain ramp to force the graph active
+        mG.gain.setValueAtTime(mG.gain.value, AC.currentTime);
+    } catch(e) {}
+    audioUnlocked = true;
+}
 
 function initAudio() {
-    AC = new (window.AudioContext || window.webkitAudioContext)();
+    // Use webkitAudioContext for older iOS Safari
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    AC = new Ctx();
+
     mG = AC.createGain(); mG.gain.value = .3;
 
     // Reverb delay
@@ -383,21 +408,21 @@ function initAudio() {
     tG=AC.createGain(); tG.gain.value=0;
     vbO=AC.createOscillator(); vbO.frequency.value=4;
     vbG=AC.createGain(); vbG.gain.value=12;
-    vbO.connect(vbG); vbG.connect(tO.frequency); vbO.start();
-    tO.connect(tG); tG.connect(mG); tG.connect(dlNode); tO.start();
+    vbO.connect(vbG); vbG.connect(tO.frequency); vbO.start(0);
+    tO.connect(tG); tG.connect(mG); tG.connect(dlNode); tO.start(0);
 
     // ─── Hover tone (always on, cursor X = pan/freq, cursor Y = filter) ───
     hoverO=AC.createOscillator(); hoverO.type='triangle'; hoverO.frequency.value=90;
     hoverF=AC.createBiquadFilter(); hoverF.type='lowpass'; hoverF.frequency.value=200; hoverF.Q.value=8;
     hoverG=AC.createGain(); hoverG.gain.value=0;
-    hoverO.connect(hoverF); hoverF.connect(hoverG); hoverG.connect(mG); hoverO.start();
+    hoverO.connect(hoverF); hoverF.connect(hoverG); hoverG.connect(mG); hoverO.start(0);
 
     // ─── Drones (4 layers) ───
     [32.7,49,65.4,73.5].forEach((f,i)=>{
         const o=AC.createOscillator(); o.type=i%2?'triangle':'sawtooth'; o.frequency.value=f;
         const g=AC.createGain(); g.gain.value=0;
         const fl=AC.createBiquadFilter(); fl.type='lowpass'; fl.frequency.value=120+i*30; fl.Q.value=4;
-        o.connect(fl); fl.connect(g); g.connect(mG); g.connect(dlNode); o.start();
+        o.connect(fl); fl.connect(g); g.connect(mG); g.connect(dlNode); o.start(0);
         dO.push(o); dG.push(g);
     });
 
@@ -408,7 +433,7 @@ function initAudio() {
         const mg=AC.createGain(); mg.gain.value=0;
         const cg=AC.createGain(); cg.gain.value=0;
         m.connect(mg); mg.connect(c.frequency); c.connect(cg); cg.connect(mG); cg.connect(dlNode);
-        m.start(); c.start(); mN.push({c,m,mg,cg});
+        m.start(0); c.start(0); mN.push({c,m,mg,cg});
     }
 
     // ─── Bandpass noise (sigil proximity + erosion) ───
@@ -417,13 +442,13 @@ function initAudio() {
     nN=AC.createBufferSource(); nN.buffer=buf; nN.loop=true;
     nF=AC.createBiquadFilter(); nF.type='bandpass'; nF.frequency.value=500; nF.Q.value=6;
     nG=AC.createGain(); nG.gain.value=0;
-    nN.connect(nF); nF.connect(nG); nG.connect(mG); nN.start();
+    nN.connect(nF); nF.connect(nG); nG.connect(mG); nN.start(0);
 
     // ─── Sub-bass rumble (total erosion = presence) ───
     subO=AC.createOscillator(); subO.type='sine'; subO.frequency.value=28;
     subF=AC.createBiquadFilter(); subF.type='lowpass'; subF.frequency.value=60; subF.Q.value=2;
     subG=AC.createGain(); subG.gain.value=0;
-    subO.connect(subF); subF.connect(subG); subG.connect(mG); subO.start();
+    subO.connect(subF); subF.connect(subG); subG.connect(mG); subO.start(0);
 
     // ─── Granular crackle (noise burst when hovering eroded areas) ───
     const cbuf=AC.createBuffer(1,AC.sampleRate,AC.sampleRate);
@@ -432,13 +457,16 @@ function initAudio() {
     crackN=AC.createBufferSource(); crackN.buffer=cbuf; crackN.loop=true;
     crackF=AC.createBiquadFilter(); crackF.type='highpass'; crackF.frequency.value=3000; crackF.Q.value=3;
     crackG=AC.createGain(); crackG.gain.value=0;
-    crackN.connect(crackF); crackF.connect(crackG); crackG.connect(mG); crackN.start();
+    crackN.connect(crackF); crackF.connect(crackG); crackG.connect(mG); crackN.start(0);
 
     // ─── Resonant click ping (triggered on mousedown) ───
     resO=AC.createOscillator(); resO.type='sine'; resO.frequency.value=800;
     resG=AC.createGain(); resG.gain.value=0;
     const resF=AC.createBiquadFilter(); resF.type='bandpass'; resF.frequency.value=800; resF.Q.value=20;
-    resO.connect(resF); resF.connect(resG); resG.connect(mG); resG.connect(dlNode); resO.start();
+    resO.connect(resF); resF.connect(resG); resG.connect(mG); resG.connect(dlNode); resO.start(0);
+
+    // Immediately try unlock
+    unlockAudioiOS();
 }
 
 // ─── Local erosion at cursor (not just sigil area) ───
@@ -462,6 +490,8 @@ function getTotalErosion() {
 
 function updateAudio() {
     if(!AC)return;
+    // iOS can re-suspend AudioContext when switching tabs/locking screen
+    if(AC.state==='suspended') AC.resume();
     const t=AC.currentTime, l=S.lvl;
     const rawSp=Math.sqrt(S.vx**2+S.vy**2);
     const rawAcc=Math.abs(rawSp-aSmooth.sp);
@@ -1025,7 +1055,9 @@ const TOUCH_RADIUS = 120; // bigger radius for fingers
 const MOUSE_RADIUS = 80;
 
 function resumeAudio() {
-    if (AC && AC.state === 'suspended') AC.resume();
+    if (!AC) return;
+    if (AC.state === 'suspended') AC.resume();
+    if (!audioUnlocked) unlockAudioiOS();
 }
 
 function moveCursor(x, y) {
@@ -1195,9 +1227,10 @@ async function startExperience() {
     // Prevent double start
     if (S.run) return;
 
+    // Init audio inside user gesture (critical for iOS)
     initAudio();
-    // Force resume on mobile (must happen in user gesture handler)
-    if (AC && AC.state === 'suspended') await AC.resume();
+    // Force resume + unlock (must happen synchronously in gesture handler)
+    await unlockAudioiOS();
 
     try { await initCam(); } catch(e) { S.cam = false; }
 
