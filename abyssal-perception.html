@@ -74,7 +74,7 @@
     <canvas id="cv"></canvas>
     <div id="hud">
         <div><div class="ht">Abyssal Perception</div><div class="hd" id="hudD">profundidad: 0</div></div>
-        <div class="hr"><div class="hl" id="hudL">I</div><div class="hm" id="hudM">capa: superficie</div></div>
+        <div class="hr"><div class="hl" id="hudL">I</div><div class="hm" id="hudM">capa: superficie</div><div class="hm" id="hudAudio" style="color:#440;margin-top:4px">audio: --</div></div>
     </div>
     <div id="flash"><div class="ft" id="flTxt"></div></div>
 </div>
@@ -369,32 +369,35 @@ let aSmooth = { sp: 0, eroLocal: 0, eroTotal: 0, acc: 0 };
 let audioUnlocked = false;
 
 // ─── iOS/Safari audio unlock ───
-// MUST be 100% synchronous inside a user gesture — zero awaits
+// Uses HTML5 <audio> element with silent MP3 data URI to set iOS audio session
+// THEN creates/resumes WebAudio context. Most reliable method for all iOS versions.
+const SILENCE_MP3 = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwmHAAAAAAD/+1DEAAAGAAGn9AAAIiMJs/80IBEAADAX/5QDj/UDkPygfB8oHwffKB+D4fygIAgGP/KAgCA4P/lAQBAMf/5cEAQHB///0YGP///Bg/h///LBBQ+D5QEAQDB///4EAQDB/lAQHf5QEAx8Hz//5cEAx/ygfh/KAgOPhLggGD/8oCAIDg/ygIBj///lwQOAxAGBAEBwf/6MEAQHB/l3d3f/LBAEAQDB//5cEAQHB/lAQFME//tQxBaAAADSAAAAAAAAANIAAAAARkZGRkZAQBgUFBQUEBAUHBwcHBAQFBQUFBQQEBQcHBwcEBAUFBQUFBAQFBwcHBwQEBQUFBQUEBAUHBwcHBAQFBQUFBQQEBQcHBwcEBAUFBQUFBAQFBwcHBwQEBQUFBQUEBAUHBwcHBAQFBQUFBQQEBQcHBwcEBAUFBQUFBAQFBwcHBwQEBQUFBQUEBAUHBwcHBAQAAA==";
+
 function unlockAudioiOS() {
     if (!AC) return;
-    // Synchronous resume (returns promise but we don't await it)
+    // 1) Play silent MP3 via <audio> element — sets iOS audio session to "playback"
+    //    This overrides the silent switch behavior on some iOS versions
+    try {
+        const audioEl = new Audio(SILENCE_MP3);
+        audioEl.setAttribute('playsinline', '');
+        audioEl.play().catch(() => {});
+    } catch(e) {}
+    // 2) Resume WebAudio context
     if (AC.state === 'suspended') AC.resume();
-    // Play a tiny silent buffer — this is THE iOS unlock trick
+    // 3) Play silent WebAudio buffer
     try {
         const silentBuf = AC.createBuffer(1, 1, AC.sampleRate);
         const src = AC.createBufferSource();
         src.buffer = silentBuf;
         src.connect(AC.destination);
         src.start(0);
-        // Also play an audible blip to force the audio path open
-        const blip = AC.createOscillator();
-        const blipG = AC.createGain();
-        blipG.gain.setValueAtTime(0.001, AC.currentTime);
-        blipG.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + 0.05);
-        blip.connect(blipG); blipG.connect(AC.destination);
-        blip.start(0); blip.stop(AC.currentTime + 0.05);
-        // Force a gain ramp to activate the audio graph
         mG.gain.setValueAtTime(mG.gain.value, AC.currentTime);
     } catch(e) {}
     audioUnlocked = true;
 }
 
 function initAudio() {
+    if (AC) return; // prevent double init
     // Use webkitAudioContext for older iOS Safari
     const Ctx = window.AudioContext || window.webkitAudioContext;
     AC = new Ctx();
@@ -496,7 +499,10 @@ function getTotalErosion() {
 function updateAudio() {
     if(!AC)return;
     // iOS can re-suspend AudioContext when switching tabs/locking screen
-    if(AC.state==='suspended') AC.resume();
+    if(AC.state==='suspended'||AC.state==='interrupted') AC.resume();
+    // Debug: show audio state in HUD
+    const ha=document.getElementById('hudAudio');
+    if(ha) ha.textContent='audio: '+AC.state+' t='+AC.currentTime.toFixed(1);
     const t=AC.currentTime, l=S.lvl;
     const rawSp=Math.sqrt(S.vx**2+S.vy**2);
     const rawAcc=Math.abs(rawSp-aSmooth.sp);
@@ -1061,7 +1067,11 @@ const MOUSE_RADIUS = 80;
 
 function resumeAudio() {
     if (!AC) return;
-    if (AC.state === 'suspended') AC.resume();
+    if (AC.state === 'suspended' || AC.state === 'interrupted') {
+        AC.resume();
+        // Re-play silent MP3 on every resume attempt (iOS can re-lock)
+        try { const a = new Audio(SILENCE_MP3); a.play().catch(()=>{}); } catch(e) {}
+    }
     if (!audioUnlocked) unlockAudioiOS();
 }
 
@@ -1084,7 +1094,9 @@ function handleMove(x, y) {
 }
 
 function handleDown(x, y) {
+    // Aggressively try to unlock audio on every touch
     resumeAudio();
+    if (AC && AC.state !== 'running') unlockAudioiOS();
     S.dig = true;
     S.mx = x; S.my = y;
     cur.classList.add('dig');
