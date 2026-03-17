@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pixel Sound Lab — Interactive Audio-Visual Experience</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0f;
+      color: #e0e0e0;
+      font-family: 'Courier New', monospace;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      background: rgba(10, 10, 15, 0.95);
+      border-bottom: 1px solid #1a1a2e;
+      z-index: 10;
+      flex-shrink: 0;
+    }
+
+    #header h1 {
+      font-size: 16px;
+      font-weight: 400;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #7b68ee;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    button {
+      background: #1a1a2e;
+      color: #7b68ee;
+      border: 1px solid #2a2a4e;
+      padding: 6px 16px;
+      font-family: inherit;
+      font-size: 12px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
+
+    button:hover { background: #2a2a4e; color: #9b88ff; }
+    button.active { background: #7b68ee; color: #0a0a0f; border-color: #7b68ee; }
+
+    select {
+      background: #1a1a2e;
+      color: #7b68ee;
+      border: 1px solid #2a2a4e;
+      padding: 6px 10px;
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    #canvas-container {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      cursor: crosshair;
+    }
+
+    #freq-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 60px;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    #overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 20;
+      pointer-events: none;
+      transition: opacity 0.5s;
+    }
+
+    #overlay.hidden { opacity: 0; }
+
+    #overlay h2 {
+      font-size: 28px;
+      font-weight: 300;
+      letter-spacing: 6px;
+      color: #7b68ee;
+      margin-bottom: 12px;
+    }
+
+    #overlay p {
+      font-size: 13px;
+      color: #666;
+      letter-spacing: 1px;
+    }
+
+    #start-btn {
+      margin-top: 20px;
+      pointer-events: all;
+      font-size: 14px;
+      padding: 10px 30px;
+      background: #7b68ee;
+      color: #0a0a0f;
+      border: none;
+    }
+
+    #start-btn:hover { background: #9b88ff; }
+
+    #info {
+      position: absolute;
+      bottom: 70px;
+      left: 20px;
+      font-size: 11px;
+      color: #444;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    .file-input-wrapper {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .file-input-wrapper input[type=file] {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="header">
+    <h1>Pixel Sound Lab</h1>
+    <div class="controls">
+      <div class="file-input-wrapper">
+        <button>Cargar Imagen</button>
+        <input type="file" id="imageInput" accept="image/*">
+      </div>
+      <div class="file-input-wrapper">
+        <button>Cargar Audio</button>
+        <input type="file" id="audioInput" accept="audio/*">
+      </div>
+      <select id="effectMode">
+        <option value="wave">Onda</option>
+        <option value="explode">Explosión</option>
+        <option value="glitch">Glitch</option>
+        <option value="ripple">Ondulación</option>
+        <option value="pixelsort">Pixel Sort</option>
+        <option value="melt">Derretir</option>
+      </select>
+      <button id="resetBtn">Reset</button>
+      <button id="micBtn">Micrófono</button>
+    </div>
+  </div>
+
+  <div id="canvas-container">
+    <canvas id="mainCanvas"></canvas>
+    <canvas id="freq-bar"></canvas>
+
+    <div id="overlay">
+      <h2>Pixel Sound Lab</h2>
+      <p>Carga una imagen y un archivo de audio</p>
+      <p>o usa el micrófono para comenzar</p>
+      <button id="start-btn">Iniciar Experiencia</button>
+    </div>
+
+    <div id="info">
+      <span id="debugInfo"></span>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // PIXEL SOUND LAB — Interactive Audio-Visual Engine
+    // ============================================================
+
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const freqCanvas = document.getElementById('freq-bar');
+    const freqCtx = freqCanvas.getContext('2d');
+
+    // --- State ---
+    let audioCtx = null;
+    let analyser = null;
+    let sourceNode = null;
+    let audioElement = null;
+    let micStream = null;
+    let frequencyData = new Uint8Array(0);
+    let timeDomainData = new Uint8Array(0);
+
+    let originalImageData = null;
+    let currentImage = null;
+    let isRunning = false;
+    let mouseX = 0, mouseY = 0;
+    let mouseActive = false;
+    let effectMode = 'wave';
+    let animFrame = null;
+    let avgFrequency = 0;
+    let bassLevel = 0;
+    let midLevel = 0;
+    let highLevel = 0;
+    let mouseTrail = [];
+
+    // --- Resize ---
+    function resizeCanvas() {
+      const container = document.getElementById('canvas-container');
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+      freqCanvas.width = container.clientWidth;
+      freqCanvas.height = 60;
+      if (currentImage) drawImageToCanvas();
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // --- Audio Setup ---
+    function initAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.8;
+      analyser.connect(audioCtx.destination);
+
+      frequencyData = new Uint8Array(analyser.frequencyBinCount);
+      timeDomainData = new Uint8Array(analyser.frequencyBinCount);
+    }
+
+    // --- Load Audio File ---
+    document.getElementById('audioInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      initAudioContext();
+
+      if (sourceNode) { sourceNode.disconnect(); sourceNode = null; }
+      if (audioElement) { audioElement.pause(); audioElement = null; }
+
+      audioElement = new Audio();
+      audioElement.crossOrigin = 'anonymous';
+      audioElement.loop = true;
+      audioElement.src = URL.createObjectURL(file);
+
+      sourceNode = audioCtx.createMediaElementSource(audioElement);
+      sourceNode.connect(analyser);
+
+      audioElement.play();
+      startExperience();
+    });
+
+    // --- Microphone ---
+    document.getElementById('micBtn').addEventListener('click', async () => {
+      try {
+        initAudioContext();
+
+        if (micStream) {
+          micStream.getTracks().forEach(t => t.stop());
+          micStream = null;
+          document.getElementById('micBtn').classList.remove('active');
+          return;
+        }
+
+        if (sourceNode) { sourceNode.disconnect(); sourceNode = null; }
+        if (audioElement) { audioElement.pause(); audioElement = null; }
+
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        sourceNode = audioCtx.createMediaStreamSource(micStream);
+        sourceNode.connect(analyser);
+
+        document.getElementById('micBtn').classList.add('active');
+        startExperience();
+      } catch (err) {
+        console.error('Mic error:', err);
+      }
+    });
+
+    // --- Load Image ---
+    document.getElementById('imageInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const img = new Image();
+      img.onload = () => {
+        currentImage = img;
+        drawImageToCanvas();
+        originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+
+    function drawImageToCanvas() {
+      const scale = Math.min(canvas.width / currentImage.width, canvas.height / currentImage.height);
+      const w = currentImage.width * scale;
+      const h = currentImage.height * scale;
+      const x = (canvas.width - w) / 2;
+      const y = (canvas.height - h) / 2;
+
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(currentImage, x, y, w, h);
+      originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    }
+
+    // --- Generate Default Image ---
+    function generateDefaultImage() {
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, w, h);
+
+      // Gradient nebula
+      for (let i = 0; i < 5; i++) {
+        const grd = ctx.createRadialGradient(
+          Math.random() * w, Math.random() * h, 0,
+          Math.random() * w, Math.random() * h, Math.random() * 400 + 200
+        );
+        const hue = Math.random() * 360;
+        grd.addColorStop(0, `hsla(${hue}, 80%, 50%, 0.3)`);
+        grd.addColorStop(0.5, `hsla(${hue + 40}, 60%, 30%, 0.15)`);
+        grd.addColorStop(1, 'transparent');
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, w, h);
+      }
+
+      // Stars
+      for (let i = 0; i < 300; i++) {
+        const sx = Math.random() * w;
+        const sy = Math.random() * h;
+        const sr = Math.random() * 2;
+        ctx.beginPath();
+        ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.8 + 0.2})`;
+        ctx.fill();
+      }
+
+      // Text
+      ctx.font = '48px Courier New';
+      ctx.fillStyle = 'rgba(123, 104, 238, 0.15)';
+      ctx.textAlign = 'center';
+      ctx.fillText('PIXEL SOUND LAB', w / 2, h / 2);
+
+      originalImageData = ctx.getImageData(0, 0, w, h);
+      currentImage = null;
+    }
+
+    // --- Start ---
+    function startExperience() {
+      document.getElementById('overlay').classList.add('hidden');
+      if (!originalImageData) generateDefaultImage();
+      if (!isRunning) {
+        isRunning = true;
+        render();
+      }
+    }
+
+    document.getElementById('start-btn').addEventListener('click', () => {
+      initAudioContext();
+      startExperience();
+    });
+
+    // --- Mouse Events ---
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+      mouseActive = true;
+      mouseTrail.push({ x: mouseX, y: mouseY, t: performance.now() });
+      if (mouseTrail.length > 30) mouseTrail.shift();
+    });
+
+    canvas.addEventListener('mouseleave', () => { mouseActive = false; });
+    canvas.addEventListener('mouseenter', () => { mouseActive = true; });
+
+    // Touch support
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const touch = e.touches[0];
+      mouseX = touch.clientX - rect.left;
+      mouseY = touch.clientY - rect.top;
+      mouseActive = true;
+      mouseTrail.push({ x: mouseX, y: mouseY, t: performance.now() });
+      if (mouseTrail.length > 30) mouseTrail.shift();
+    }, { passive: false });
+
+    // --- Effect Mode ---
+    document.getElementById('effectMode').addEventListener('change', (e) => {
+      effectMode = e.target.value;
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      if (originalImageData) {
+        ctx.putImageData(originalImageData, 0, 0);
+      }
+    });
+
+    // --- Audio Analysis ---
+    function analyzeAudio() {
+      if (!analyser) return;
+      analyser.getByteFrequencyData(frequencyData);
+      analyser.getByteTimeDomainData(timeDomainData);
+
+      const len = frequencyData.length;
+      let sum = 0;
+      let bassSum = 0, midSum = 0, highSum = 0;
+      const bassEnd = Math.floor(len * 0.1);
+      const midEnd = Math.floor(len * 0.5);
+
+      for (let i = 0; i < len; i++) {
+        sum += frequencyData[i];
+        if (i < bassEnd) bassSum += frequencyData[i];
+        else if (i < midEnd) midSum += frequencyData[i];
+        else highSum += frequencyData[i];
+      }
+
+      avgFrequency = sum / len;
+      bassLevel = bassSum / bassEnd;
+      midLevel = midSum / (midEnd - bassEnd);
+      highLevel = highSum / (len - midEnd);
+    }
+
+    // --- Pixel Effects ---
+    function applyEffect(time) {
+      if (!originalImageData) return;
+
+      const src = originalImageData.data;
+      const output = ctx.createImageData(canvas.width, canvas.height);
+      const dst = output.data;
+      const w = canvas.width;
+      const h = canvas.height;
+
+      const intensity = avgFrequency / 255;
+      const bassNorm = bassLevel / 255;
+      const midNorm = midLevel / 255;
+      const highNorm = highLevel / 255;
+      const radius = 200 + bassNorm * 150;
+
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          let srcX = x;
+          let srcY = y;
+          const idx = (y * w + x) * 4;
+
+          const dx = x - mouseX;
+          const dy = y - mouseY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const mouseInfluence = mouseActive ? Math.max(0, 1 - dist / radius) : 0;
+
+          switch (effectMode) {
+            case 'wave': {
+              const waveAmp = (10 + bassNorm * 40) * mouseInfluence;
+              const waveFreq = 0.02 + highNorm * 0.05;
+              srcX = Math.round(x + Math.sin(y * waveFreq + time * 0.003) * waveAmp);
+              srcY = Math.round(y + Math.cos(x * waveFreq + time * 0.002) * waveAmp * 0.6);
+              break;
+            }
+            case 'explode': {
+              if (mouseInfluence > 0) {
+                const angle = Math.atan2(dy, dx);
+                const push = mouseInfluence * mouseInfluence * (30 + bassNorm * 80);
+                srcX = Math.round(x + Math.cos(angle) * push);
+                srcY = Math.round(y + Math.sin(angle) * push);
+              }
+              break;
+            }
+            case 'glitch': {
+              if (mouseInfluence > 0.3 && Math.random() < intensity * 0.3) {
+                const shift = Math.floor((Math.random() - 0.5) * 40 * bassNorm);
+                srcX = x + shift;
+                if (Math.random() < 0.1) srcY = y + Math.floor((Math.random() - 0.5) * 20);
+              }
+              break;
+            }
+            case 'ripple': {
+              if (mouseInfluence > 0) {
+                const ripple = Math.sin(dist * 0.05 - time * 0.005) * mouseInfluence * (15 + midNorm * 30);
+                const angle = Math.atan2(dy, dx);
+                srcX = Math.round(x + Math.cos(angle) * ripple);
+                srcY = Math.round(y + Math.sin(angle) * ripple);
+              }
+              break;
+            }
+            case 'pixelsort': {
+              const sortIntensity = mouseInfluence * (1 + bassNorm * 2);
+              if (sortIntensity > 0.2) {
+                const offset = Math.floor(sortIntensity * 30 * Math.sin(time * 0.001 + y * 0.1));
+                srcX = x + offset;
+              }
+              break;
+            }
+            case 'melt': {
+              if (mouseInfluence > 0) {
+                const meltAmount = mouseInfluence * mouseInfluence * (20 + bassNorm * 60);
+                srcY = Math.round(y + meltAmount);
+                srcX = Math.round(x + Math.sin(y * 0.1 + time * 0.002) * meltAmount * 0.3);
+              }
+              break;
+            }
+          }
+
+          // Clamp
+          srcX = Math.max(0, Math.min(w - 1, srcX));
+          srcY = Math.max(0, Math.min(h - 1, srcY));
+
+          const srcIdx = (srcY * w + srcX) * 4;
+
+          // Color shift based on audio
+          let r = src[srcIdx];
+          let g = src[srcIdx + 1];
+          let b = src[srcIdx + 2];
+
+          if (mouseInfluence > 0.1) {
+            r = Math.min(255, r + bassNorm * 40 * mouseInfluence);
+            g = Math.min(255, g + midNorm * 30 * mouseInfluence);
+            b = Math.min(255, b + highNorm * 50 * mouseInfluence);
+          }
+
+          dst[idx] = r;
+          dst[idx + 1] = g;
+          dst[idx + 2] = b;
+          dst[idx + 3] = src[srcIdx + 3];
+        }
+      }
+
+      ctx.putImageData(output, 0, 0);
+
+      // Draw mouse trail glow
+      if (mouseActive && mouseTrail.length > 1) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.beginPath();
+        ctx.moveTo(mouseTrail[0].x, mouseTrail[0].y);
+        for (let i = 1; i < mouseTrail.length; i++) {
+          ctx.lineTo(mouseTrail[i].x, mouseTrail[i].y);
+        }
+        ctx.strokeStyle = `rgba(123, 104, 238, ${0.2 + bassNorm * 0.5})`;
+        ctx.lineWidth = 2 + bassNorm * 4;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // --- Frequency Visualizer ---
+    function drawFrequencyBar() {
+      const w = freqCanvas.width;
+      const h = freqCanvas.height;
+      freqCtx.clearRect(0, 0, w, h);
+
+      if (!frequencyData || frequencyData.length === 0) return;
+
+      const barCount = 128;
+      const barWidth = w / barCount;
+      const step = Math.floor(frequencyData.length / barCount);
+
+      for (let i = 0; i < barCount; i++) {
+        const val = frequencyData[i * step] / 255;
+        const barHeight = val * h;
+        const hue = 250 + val * 60;
+
+        freqCtx.fillStyle = `hsla(${hue}, 70%, 60%, ${0.4 + val * 0.6})`;
+        freqCtx.fillRect(
+          i * barWidth,
+          h - barHeight,
+          barWidth - 1,
+          barHeight
+        );
+      }
+    }
+
+    // --- Debug ---
+    function updateDebug() {
+      document.getElementById('debugInfo').textContent =
+        `efecto: ${effectMode} | bass: ${bassLevel.toFixed(0)} | mid: ${midLevel.toFixed(0)} | high: ${highLevel.toFixed(0)} | mouse: ${mouseX.toFixed(0)},${mouseY.toFixed(0)}`;
+    }
+
+    // --- Main Render Loop ---
+    function render() {
+      if (!isRunning) return;
+      const time = performance.now();
+
+      analyzeAudio();
+      applyEffect(time);
+      drawFrequencyBar();
+      updateDebug();
+
+      // Clean old trail points
+      const now = performance.now();
+      mouseTrail = mouseTrail.filter(p => now - p.t < 500);
+
+      animFrame = requestAnimationFrame(render);
+    }
+
+    // --- Init default image on load ---
+    generateDefaultImage();
+  </script>
+</body>
+</html>

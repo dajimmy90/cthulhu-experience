@@ -1,0 +1,1300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abyssal Perception — Terror Cósmico Interactivo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&family=Lora:ital,wght@0,400;0,500;1,400&family=Special+Elite&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --void: #050508;
+            --abyss: #0a0a12;
+            --deep-green: #1a3a2a;
+            --bioluminescent: #2aff8a;
+            --cosmic-blue: #4a2aff;
+            --ultraviolet: #7b2aff;
+            --amber-decay: #cc8844;
+            --flesh: #d4a574;
+            --blood: #8b1a1a;
+            --text-dim: #3a3a4a;
+            --text-glow: #6a8a7a;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--void);
+            color: #c0c0c0;
+            font-family: 'Poppins', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            cursor: none;
+        }
+
+        /* Custom cursor */
+        #cursor {
+            position: fixed;
+            width: 20px;
+            height: 20px;
+            border: 1px solid var(--bioluminescent);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            transition: transform 0.1s, border-color 0.3s;
+            mix-blend-mode: difference;
+        }
+
+        #cursor.near-sigil {
+            transform: scale(2.5);
+            border-color: var(--blood);
+            border-width: 2px;
+        }
+
+        /* ═══════ INTRO SCREEN ═══════ */
+        #intro {
+            position: fixed;
+            inset: 0;
+            background: var(--void);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 1.5s ease;
+        }
+
+        #intro.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .intro-symbol {
+            font-size: 60px;
+            color: var(--deep-green);
+            margin-bottom: 30px;
+            animation: pulse-symbol 4s ease-in-out infinite;
+            font-family: 'Special Elite', serif;
+        }
+
+        @keyframes pulse-symbol {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.05); }
+        }
+
+        .intro-title {
+            font-family: 'Special Elite', serif;
+            font-size: clamp(28px, 5vw, 56px);
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            color: var(--text-glow);
+            text-align: center;
+            margin-bottom: 10px;
+            text-shadow: 0 0 40px rgba(42, 255, 138, 0.1);
+        }
+
+        .intro-subtitle {
+            font-family: 'Lora', serif;
+            font-style: italic;
+            font-size: clamp(14px, 2vw, 18px);
+            color: var(--text-dim);
+            margin-bottom: 50px;
+            letter-spacing: 3px;
+        }
+
+        .intro-text {
+            max-width: 600px;
+            text-align: center;
+            padding: 0 20px;
+            margin-bottom: 50px;
+        }
+
+        .intro-text p {
+            font-family: 'Lora', serif;
+            font-size: 15px;
+            line-height: 1.9;
+            color: #4a4a5a;
+            margin-bottom: 18px;
+        }
+
+        .intro-text p em {
+            color: var(--text-glow);
+            font-style: normal;
+        }
+
+        .enter-btn {
+            background: transparent;
+            border: 1px solid var(--deep-green);
+            color: var(--text-glow);
+            font-family: 'Special Elite', serif;
+            font-size: 16px;
+            letter-spacing: 4px;
+            padding: 16px 50px;
+            cursor: none;
+            transition: all 0.5s;
+            text-transform: uppercase;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .enter-btn:hover {
+            background: rgba(42, 255, 138, 0.05);
+            border-color: var(--bioluminescent);
+            box-shadow: 0 0 30px rgba(42, 255, 138, 0.1);
+        }
+
+        .enter-btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(42, 255, 138, 0.05), transparent);
+            transform: translateX(-100%);
+            animation: shimmer 3s infinite;
+        }
+
+        @keyframes shimmer {
+            100% { transform: translateX(100%); }
+        }
+
+        /* ═══════ MAIN CANVAS ═══════ */
+        #main-container {
+            position: fixed;
+            inset: 0;
+            display: none;
+        }
+
+        #main-container.active { display: block; }
+
+        canvas#mainCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        video#camera {
+            display: none;
+        }
+
+        /* ═══════ HUD ═══════ */
+        #hud {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .hud-left {
+            font-family: 'Special Elite', serif;
+        }
+
+        .hud-title {
+            font-size: 14px;
+            letter-spacing: 4px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+
+        .hud-depth {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: var(--deep-green);
+            margin-top: 4px;
+        }
+
+        .hud-right {
+            text-align: right;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .hud-level {
+            font-size: 24px;
+            color: var(--text-glow);
+            font-family: 'Special Elite', serif;
+        }
+
+        /* ═══════ TRANSITION OVERLAY ═══════ */
+        #transition {
+            position: fixed;
+            inset: 0;
+            background: var(--void);
+            z-index: 80;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.8s;
+        }
+
+        #transition.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .transition-text {
+            font-family: 'Special Elite', serif;
+            font-size: 20px;
+            color: var(--text-glow);
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            animation: glitch-text 0.3s infinite;
+        }
+
+        @keyframes glitch-text {
+            0% { transform: translate(0); }
+            20% { transform: translate(-2px, 1px); }
+            40% { transform: translate(2px, -1px); }
+            60% { transform: translate(-1px, -2px); }
+            80% { transform: translate(1px, 2px); }
+            100% { transform: translate(0); }
+        }
+
+        /* ═══════ SIDEBAR CONTROLS ═══════ */
+        #sidebar {
+            position: fixed;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 280px;
+            background: rgba(5, 5, 8, 0.92);
+            backdrop-filter: blur(10px);
+            border-left: 1px solid rgba(42, 255, 138, 0.08);
+            padding: 80px 20px 20px;
+            z-index: 40;
+            overflow-y: auto;
+            transform: translateX(100%);
+            transition: transform 0.4s ease;
+            pointer-events: all;
+        }
+
+        #sidebar.open { transform: translateX(0); }
+
+        #sidebar-toggle {
+            position: fixed;
+            right: 15px;
+            bottom: 15px;
+            width: 40px;
+            height: 40px;
+            background: rgba(5, 5, 8, 0.8);
+            border: 1px solid rgba(42, 255, 138, 0.15);
+            color: var(--text-glow);
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: none;
+            z-index: 60;
+            pointer-events: all;
+        }
+
+        .sidebar-section {
+            margin-bottom: 24px;
+        }
+
+        .sidebar-section h3 {
+            font-family: 'Special Elite', serif;
+            font-size: 12px;
+            letter-spacing: 3px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            border-bottom: 1px solid rgba(42, 255, 138, 0.05);
+            padding-bottom: 6px;
+        }
+
+        .param-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .param-row label {
+            font-size: 11px;
+            color: var(--text-dim);
+            font-family: 'Courier New', monospace;
+        }
+
+        .param-row input[type="range"] {
+            width: 100px;
+            height: 3px;
+            -webkit-appearance: none;
+            background: rgba(42, 255, 138, 0.1);
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .param-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: var(--deep-green);
+            border-radius: 50%;
+            cursor: none;
+        }
+
+        .param-value {
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            color: var(--text-glow);
+            min-width: 35px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="cursor"></div>
+
+    <!-- ═══════ INTRO SCREEN ═══════ -->
+    <div id="intro">
+        <div class="intro-symbol">&#9064;</div>
+        <h1 class="intro-title">Abyssal Perception</h1>
+        <div class="intro-subtitle">Un ritual de terror c&oacute;smico interactivo</div>
+
+        <div class="intro-text">
+            <p>
+                La realidad es una membrana delgada. Tu c&aacute;mara captura lo que
+                crees que es real — pero debajo de cada p&iacute;xel hay algo que
+                <em>no deber&iacute;a ser visto</em>.
+            </p>
+            <p>
+                Se te pedir&aacute; acceso a tu c&aacute;mara. Tu rostro ser&aacute; el portal.
+                Mueve el cursor para distorsionar la realidad. Encuentra los
+                <em>puntos de fractura</em> ocultos en la imagen. Cada click
+                te llevar&aacute; m&aacute;s profundo.
+            </p>
+            <p>
+                Tus acciones componen el sonido. No hay m&uacute;sica pregrabada —
+                cada distorsi&oacute;n, cada b&uacute;squeda, cada descenso genera
+                frecuencias que nunca antes han existido.
+            </p>
+        </div>
+
+        <button class="enter-btn" id="enterBtn">Abrir el portal</button>
+    </div>
+
+    <!-- ═══════ MAIN EXPERIENCE ═══════ -->
+    <div id="main-container">
+        <video id="camera" autoplay playsinline></video>
+        <canvas id="mainCanvas"></canvas>
+
+        <div id="hud">
+            <div class="hud-left">
+                <div class="hud-title">Abyssal Perception</div>
+                <div class="hud-depth" id="hudDepth">profundidad: 0</div>
+            </div>
+            <div class="hud-right">
+                <div class="hud-level" id="hudLevel">I</div>
+                <div id="hudMode">fase: singular</div>
+            </div>
+        </div>
+
+        <div id="transition">
+            <div class="transition-text" id="transitionText">DESCENDIENDO</div>
+        </div>
+
+        <button id="sidebar-toggle" onclick="toggleSidebar()">&#9881;</button>
+
+        <div id="sidebar">
+            <div class="sidebar-section">
+                <h3>Distorsi&oacute;n</h3>
+                <div class="param-row">
+                    <label>Intensidad</label>
+                    <input type="range" id="pIntensity" min="0" max="100" value="50" oninput="updateUIParam('intensity', this.value)">
+                    <span class="param-value" id="pIntensity-v">50</span>
+                </div>
+                <div class="param-row">
+                    <label>Derretir</label>
+                    <input type="range" id="pMelt" min="0" max="100" value="30" oninput="updateUIParam('melt', this.value)">
+                    <span class="param-value" id="pMelt-v">30</span>
+                </div>
+                <div class="param-row">
+                    <label>Glitch</label>
+                    <input type="range" id="pGlitch" min="0" max="100" value="20" oninput="updateUIParam('glitch', this.value)">
+                    <span class="param-value" id="pGlitch-v">20</span>
+                </div>
+                <div class="param-row">
+                    <label>Crom&aacute;tico</label>
+                    <input type="range" id="pChromatic" min="0" max="100" value="25" oninput="updateUIParam('chromatic', this.value)">
+                    <span class="param-value" id="pChromatic-v">25</span>
+                </div>
+            </div>
+            <div class="sidebar-section">
+                <h3>Audio</h3>
+                <div class="param-row">
+                    <label>Theremin</label>
+                    <input type="range" id="pTheremin" min="0" max="100" value="60" oninput="updateUIParam('theremin', this.value)">
+                    <span class="param-value" id="pTheremin-v">60</span>
+                </div>
+                <div class="param-row">
+                    <label>Met&aacute;lico</label>
+                    <input type="range" id="pMetallic" min="0" max="100" value="40" oninput="updateUIParam('metallic', this.value)">
+                    <span class="param-value" id="pMetallic-v">40</span>
+                </div>
+                <div class="param-row">
+                    <label>Drones</label>
+                    <input type="range" id="pDrone" min="0" max="100" value="50" oninput="updateUIParam('drone', this.value)">
+                    <span class="param-value" id="pDrone-v">50</span>
+                </div>
+            </div>
+            <div class="sidebar-section">
+                <h3>Seed</h3>
+                <div class="param-row">
+                    <label>Semilla</label>
+                    <input type="range" id="pSeed" min="1" max="9999" value="666" oninput="updateUIParam('seed', this.value)">
+                    <span class="param-value" id="pSeed-v">666</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // ═══════════════════════════════════════════════════════════════════
+    // ABYSSAL PERCEPTION — Cosmic Terror Interactive Engine
+    // ═══════════════════════════════════════════════════════════════════
+
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const video = document.getElementById('camera');
+    const cursorEl = document.getElementById('cursor');
+
+    // ─── State ───
+    let state = {
+        phase: 'intro',       // intro | singular | prismatic
+        level: 0,             // depth level (0-indexed)
+        seed: 666,
+        mouseX: 0, mouseY: 0,
+        mouseVX: 0, mouseVY: 0,
+        prevMouseX: 0, prevMouseY: 0,
+        mouseActive: false,
+        cameraReady: false,
+        running: false,
+        time: 0,
+
+        // Sigil (hidden click point)
+        sigil: { x: 0, y: 0, radius: 30, pulse: 0 },
+        sigilFound: false,
+
+        // Prismatic phase
+        prismaticCells: [],
+        activeCellIndex: -1,
+
+        // Params
+        intensity: 0.5,
+        melt: 0.3,
+        glitch: 0.2,
+        chromatic: 0.25,
+        thereminVol: 0.6,
+        metallicVol: 0.4,
+        droneVol: 0.5,
+
+        // Audio composition memory
+        actionHistory: [],
+        totalClicks: 0,
+        totalDistance: 0,
+    };
+
+    // ─── Seeded Random ───
+    let rngState = 666;
+    function seededRandom() {
+        rngState = (rngState * 16807 + 0) % 2147483647;
+        return (rngState - 1) / 2147483646;
+    }
+    function setSeed(s) {
+        rngState = s % 2147483647;
+        if (rngState <= 0) rngState += 2147483646;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // AUDIO ENGINE — Generative Cosmic Horror Synthesis
+    // ═══════════════════════════════════════════════════════════════════
+
+    let audioCtx = null;
+    let masterGain = null;
+
+    // Oscillator pools
+    let thereminOsc = null, thereminGain = null;
+    let droneOscs = [], droneGains = [];
+    let metallicNodes = [];
+    let noiseNode = null, noiseGain = null, noiseFilter = null;
+    let reverbConvolver = null;
+
+    // Ghost layers (audio memory from past levels)
+    let ghostLayers = [];
+
+    function initAudio() {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Master output
+        masterGain = audioCtx.createGain();
+        masterGain.gain.value = 0.35;
+
+        // Simple reverb via delay feedback
+        const delay = audioCtx.createDelay(2.0);
+        delay.delayTime.value = 0.4;
+        const feedback = audioCtx.createGain();
+        feedback.gain.value = 0.3;
+        const reverbFilter = audioCtx.createBiquadFilter();
+        reverbFilter.type = 'lowpass';
+        reverbFilter.frequency.value = 2000;
+
+        delay.connect(feedback);
+        feedback.connect(reverbFilter);
+        reverbFilter.connect(delay);
+        delay.connect(masterGain);
+        masterGain.connect(audioCtx.destination);
+
+        // ─── THEREMIN (mouse-controlled pitch) ───
+        thereminOsc = audioCtx.createOscillator();
+        thereminOsc.type = 'sine';
+        thereminOsc.frequency.value = 220;
+        thereminGain = audioCtx.createGain();
+        thereminGain.gain.value = 0;
+
+        // Vibrato
+        const vibrato = audioCtx.createOscillator();
+        vibrato.frequency.value = 5;
+        const vibratoGain = audioCtx.createGain();
+        vibratoGain.gain.value = 8;
+        vibrato.connect(vibratoGain);
+        vibratoGain.connect(thereminOsc.frequency);
+        vibrato.start();
+
+        thereminOsc.connect(thereminGain);
+        thereminGain.connect(masterGain);
+        thereminGain.connect(delay);
+        thereminOsc.start();
+
+        // ─── DRONES (ambient bass) ───
+        const droneFreqs = [55, 55 * 1.5, 82.41, 36.71];
+        droneFreqs.forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            osc.type = i % 2 === 0 ? 'sawtooth' : 'triangle';
+            osc.frequency.value = freq;
+
+            const gain = audioCtx.createGain();
+            gain.gain.value = 0;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 200 + i * 50;
+            filter.Q.value = 2;
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(masterGain);
+            gain.connect(delay);
+            osc.start();
+
+            droneOscs.push(osc);
+            droneGains.push(gain);
+        });
+
+        // ─── METALLIC (FM synthesis percussion) ───
+        for (let i = 0; i < 4; i++) {
+            const carrier = audioCtx.createOscillator();
+            carrier.type = 'sine';
+            carrier.frequency.value = 200 + i * 150;
+
+            const modulator = audioCtx.createOscillator();
+            modulator.type = 'sine';
+            modulator.frequency.value = carrier.frequency.value * (1.4 + i * 0.3);
+
+            const modGain = audioCtx.createGain();
+            modGain.gain.value = 0;
+
+            const carrierGain = audioCtx.createGain();
+            carrierGain.gain.value = 0;
+
+            modulator.connect(modGain);
+            modGain.connect(carrier.frequency);
+            carrier.connect(carrierGain);
+            carrierGain.connect(masterGain);
+            carrierGain.connect(delay);
+
+            modulator.start();
+            carrier.start();
+
+            metallicNodes.push({ carrier, modulator, modGain, carrierGain });
+        }
+
+        // ─── NOISE (stochastic texture) ───
+        const bufferSize = audioCtx.sampleRate * 2;
+        const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+
+        noiseNode = audioCtx.createBufferSource();
+        noiseNode.buffer = noiseBuffer;
+        noiseNode.loop = true;
+
+        noiseFilter = audioCtx.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.value = 800;
+        noiseFilter.Q.value = 5;
+
+        noiseGain = audioCtx.createGain();
+        noiseGain.gain.value = 0;
+
+        noiseNode.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(masterGain);
+        noiseNode.start();
+    }
+
+    function updateAudio() {
+        if (!audioCtx) return;
+        const t = audioCtx.currentTime;
+        const lvl = state.level;
+        const mouseSpeed = Math.sqrt(state.mouseVX ** 2 + state.mouseVY ** 2);
+
+        // ── Theremin: pitch from mouseY, volume from movement ──
+        const targetFreq = 100 + (1 - state.mouseY / canvas.height) * 600 + lvl * 50;
+        thereminOsc.frequency.exponentialRampToValueAtTime(
+            Math.max(20, targetFreq), t + 0.05
+        );
+        const thereminTarget = Math.min(0.4, mouseSpeed * 0.003) * state.thereminVol;
+        thereminGain.gain.linearRampToValueAtTime(thereminTarget, t + 0.1);
+
+        // ── Drones: swell with level depth ──
+        const droneBase = Math.min(0.12, 0.02 + lvl * 0.015) * state.droneVol;
+        droneGains.forEach((g, i) => {
+            const mod = Math.sin(state.time * 0.001 * (1 + i * 0.3)) * 0.5 + 0.5;
+            g.gain.linearRampToValueAtTime(droneBase * mod, t + 0.1);
+        });
+
+        // ── Drone detuning for unease ──
+        droneOscs.forEach((osc, i) => {
+            const detune = Math.sin(state.time * 0.0003 * (i + 1)) * (5 + lvl * 3);
+            osc.detune.linearRampToValueAtTime(detune, t + 0.1);
+        });
+
+        // ── Metallic: triggered by mouse speed ──
+        metallicNodes.forEach((node, i) => {
+            const threshold = 3 + i * 2;
+            if (mouseSpeed > threshold) {
+                const vol = Math.min(0.15, (mouseSpeed - threshold) * 0.005) * state.metallicVol;
+                node.carrierGain.gain.linearRampToValueAtTime(vol, t + 0.02);
+                node.modGain.gain.linearRampToValueAtTime(
+                    vol * (100 + lvl * 50), t + 0.02
+                );
+            } else {
+                node.carrierGain.gain.linearRampToValueAtTime(0, t + 0.3);
+            }
+        });
+
+        // ── Noise: increases with level and mouse proximity to sigil ──
+        if (state.phase !== 'intro') {
+            const sigilDist = Math.sqrt(
+                (state.mouseX - state.sigil.x) ** 2 +
+                (state.mouseY - state.sigil.y) ** 2
+            );
+            const proximity = Math.max(0, 1 - sigilDist / 300);
+            const noiseVol = (0.02 + proximity * 0.1 + lvl * 0.01) * state.intensity;
+            noiseGain.gain.linearRampToValueAtTime(Math.min(0.2, noiseVol), t + 0.1);
+            noiseFilter.frequency.linearRampToValueAtTime(
+                400 + proximity * 2000 + mouseSpeed * 10, t + 0.1
+            );
+        }
+    }
+
+    // Trigger a metallic impact on click
+    function triggerImpact() {
+        if (!audioCtx) return;
+        const t = audioCtx.currentTime;
+
+        metallicNodes.forEach((node, i) => {
+            node.carrierGain.gain.setValueAtTime(0.2 * state.metallicVol, t);
+            node.carrierGain.gain.exponentialRampToValueAtTime(0.001, t + 0.8 + i * 0.2);
+            node.modGain.gain.setValueAtTime(300 + state.level * 100, t);
+            node.modGain.gain.exponentialRampToValueAtTime(1, t + 1.0);
+        });
+
+        // Noise burst
+        noiseGain.gain.setValueAtTime(0.25, t);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+        noiseFilter.frequency.setValueAtTime(3000, t);
+        noiseFilter.frequency.exponentialRampToValueAtTime(200, t + 0.5);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CAMERA
+    // ═══════════════════════════════════════════════════════════════════
+
+    async function initCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+            });
+            video.srcObject = stream;
+            await video.play();
+            state.cameraReady = true;
+        } catch (err) {
+            console.error('Camera error:', err);
+            // Fallback: generate synthetic visual
+            state.cameraReady = false;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CANVAS SETUP
+    // ═══════════════════════════════════════════════════════════════════
+
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SIGIL (Hidden Click Point) GENERATION
+    // ═══════════════════════════════════════════════════════════════════
+
+    function generateSigil() {
+        setSeed(state.seed + state.level * 137);
+        const margin = 80;
+        state.sigil = {
+            x: margin + seededRandom() * (canvas.width - margin * 2),
+            y: margin + seededRandom() * (canvas.height - margin * 2),
+            radius: Math.max(15, 35 - state.level * 2),
+            pulse: 0
+        };
+        state.sigilFound = false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // PRISMATIC PHASE — Generate cell grid
+    // ═══════════════════════════════════════════════════════════════════
+
+    function generatePrismaticCells() {
+        const count = Math.min(20, 4 + state.level * 4);
+        const cols = Math.ceil(Math.sqrt(count));
+        const rows = Math.ceil(count / cols);
+        const cellW = canvas.width / cols;
+        const cellH = canvas.height / rows;
+
+        state.prismaticCells = [];
+        setSeed(state.seed + state.level * 271);
+
+        for (let i = 0; i < count; i++) {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            state.prismaticCells.push({
+                x: col * cellW,
+                y: row * cellH,
+                w: cellW,
+                h: cellH,
+                distortSeed: seededRandom() * 10000,
+                rotAngle: (seededRandom() - 0.5) * 0.3,
+                hueShift: seededRandom() * 60 - 30,
+                meltDir: seededRandom() > 0.5 ? 1 : -1,
+            });
+        }
+
+        // Pick which cell hides the sigil
+        state.activeCellIndex = Math.floor(seededRandom() * count);
+        const activeCell = state.prismaticCells[state.activeCellIndex];
+        state.sigil = {
+            x: activeCell.x + activeCell.w * (0.2 + seededRandom() * 0.6),
+            y: activeCell.y + activeCell.h * (0.2 + seededRandom() * 0.6),
+            radius: Math.max(12, 30 - state.level * 1.5),
+            pulse: 0
+        };
+        state.sigilFound = false;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // PIXEL DISTORTION ENGINE
+    // ═══════════════════════════════════════════════════════════════════
+
+    function drawCameraFrame() {
+        if (!state.cameraReady) {
+            // Synthetic fallback: noise pattern
+            const imgData = ctx.createImageData(canvas.width, canvas.height);
+            const d = imgData.data;
+            for (let i = 0; i < d.length; i += 4) {
+                const v = Math.random() * 30;
+                d[i] = v; d[i+1] = v * 0.8; d[i+2] = v * 1.5; d[i+3] = 255;
+            }
+            ctx.putImageData(imgData, 0, 0);
+            return;
+        }
+
+        // Draw mirrored camera (selfie mode)
+        ctx.save();
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+    }
+
+    function applySingularDistortion(time) {
+        const w = canvas.width;
+        const h = canvas.height;
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const src = new Uint8ClampedArray(imgData.data);
+        const dst = imgData.data;
+
+        const mx = state.mouseX;
+        const my = state.mouseY;
+        const lvl = state.level;
+        const intens = state.intensity;
+        const meltAmt = state.melt;
+        const glitchAmt = state.glitch;
+        const chromAmt = state.chromatic;
+
+        const radius = 250 + lvl * 30;
+
+        // Process every Nth pixel for performance, fill between
+        const step = 1;
+
+        for (let y = 0; y < h; y += step) {
+            for (let x = 0; x < w; x += step) {
+                const idx = (y * w + x) * 4;
+                const dx = x - mx;
+                const dy = y - my;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const influence = Math.max(0, 1 - dist / radius);
+                const inf2 = influence * influence;
+
+                let srcX = x;
+                let srcY = y;
+
+                // Wave distortion
+                const waveAmp = (5 + intens * 30 + lvl * 5) * inf2;
+                const waveFreq = 0.015 + lvl * 0.003;
+                srcX += Math.sin(y * waveFreq + time * 0.003) * waveAmp;
+                srcY += Math.cos(x * waveFreq + time * 0.002) * waveAmp * 0.7;
+
+                // Melt (pixels fall downward from cursor)
+                if (inf2 > 0.05) {
+                    srcY += inf2 * meltAmt * (40 + lvl * 15);
+                    srcX += Math.sin(y * 0.08 + time * 0.002) * inf2 * meltAmt * 15;
+                }
+
+                // Glitch (horizontal line displacement)
+                if (inf2 > 0.2 && Math.random() < glitchAmt * 0.15 * (1 + lvl * 0.3)) {
+                    srcX += (Math.random() - 0.5) * glitchAmt * 60;
+                    if (Math.random() < 0.08) srcY += (Math.random() - 0.5) * 30;
+                }
+
+                // Tentacle-like warping (Lovecraftian)
+                const tentaclePhase = time * 0.001 + dist * 0.01;
+                const tentacleAmp = inf2 * intens * (15 + lvl * 8);
+                srcX += Math.sin(tentaclePhase * 2.3) * Math.cos(tentaclePhase * 0.7) * tentacleAmp;
+                srcY += Math.cos(tentaclePhase * 1.7) * Math.sin(tentaclePhase * 1.1) * tentacleAmp;
+
+                // Clamp
+                srcX = Math.max(0, Math.min(w - 1, Math.round(srcX)));
+                srcY = Math.max(0, Math.min(h - 1, Math.round(srcY)));
+
+                const srcIdx = (srcY * w + srcX) * 4;
+
+                // Chromatic aberration
+                const chromOffset = Math.round(chromAmt * (10 + lvl * 5) * inf2);
+                const srcIdxR = (srcY * w + Math.min(w - 1, Math.max(0, srcX + chromOffset))) * 4;
+                const srcIdxB = (srcY * w + Math.min(w - 1, Math.max(0, srcX - chromOffset))) * 4;
+
+                let r = src[srcIdxR];
+                let g = src[srcIdx + 1];
+                let b = src[srcIdxB + 2];
+
+                // Color shift toward cosmic palette
+                if (inf2 > 0.1) {
+                    const cosmicMix = inf2 * 0.3 * (1 + lvl * 0.15);
+                    // Sickly green + ultraviolet
+                    r = r * (1 - cosmicMix) + (r * 0.4 + 20) * cosmicMix;
+                    g = g * (1 - cosmicMix * 0.5) + (g * 1.2 + 40) * (cosmicMix * 0.5);
+                    b = b * (1 - cosmicMix) + (b * 0.8 + 80) * cosmicMix;
+                }
+
+                // Vignette at edges
+                const edgeDist = Math.sqrt((x/w - 0.5)**2 + (y/h - 0.5)**2) * 1.5;
+                const vignette = Math.max(0, 1 - edgeDist * edgeDist);
+
+                dst[idx] = Math.min(255, r * vignette);
+                dst[idx + 1] = Math.min(255, g * vignette);
+                dst[idx + 2] = Math.min(255, b * vignette);
+                dst[idx + 3] = 255;
+            }
+        }
+
+        ctx.putImageData(imgData, 0, 0);
+    }
+
+    function applyPrismaticDistortion(time) {
+        // First draw full frame
+        const fullFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+        // Clear
+        ctx.fillStyle = '#050508';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const cells = state.prismaticCells;
+        const mx = state.mouseX;
+        const my = state.mouseY;
+
+        cells.forEach((cell, i) => {
+            // Create a clipped, distorted version for each cell
+            ctx.save();
+
+            // Cell boundary
+            ctx.beginPath();
+            ctx.rect(cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4);
+            ctx.clip();
+
+            // Draw the camera frame into this cell with unique distortion
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = Math.ceil(cell.w);
+            offCanvas.height = Math.ceil(cell.h);
+            const offCtx = offCanvas.getContext('2d');
+
+            // Sample from full frame with offset distortion
+            const cellImgData = offCtx.createImageData(offCanvas.width, offCanvas.height);
+            const dst = cellImgData.data;
+            const src = fullFrame.data;
+            const fw = canvas.width;
+            const fh = canvas.height;
+
+            const localMx = mx - cell.x;
+            const localMy = my - cell.y;
+
+            for (let y = 0; y < offCanvas.height; y++) {
+                for (let x = 0; x < offCanvas.width; x++) {
+                    const dstIdx = (y * offCanvas.width + x) * 4;
+
+                    let srcX = Math.round(cell.x + x);
+                    let srcY = Math.round(cell.y + y);
+
+                    // Unique distortion per cell
+                    const phase = cell.distortSeed + time * 0.002;
+                    const localDist = Math.sqrt((x - localMx)**2 + (y - localMy)**2);
+                    const localInf = Math.max(0, 1 - localDist / 150);
+
+                    // Wave
+                    srcX += Math.sin(y * 0.03 + phase) * (5 + state.level * 3) * localInf;
+                    srcY += Math.cos(x * 0.03 + phase * 0.7) * (5 + state.level * 3) * localInf;
+
+                    // Rotation-like displacement
+                    const angle = cell.rotAngle * localInf;
+                    const cx = offCanvas.width / 2;
+                    const cy = offCanvas.height / 2;
+                    const rx = Math.cos(angle) * (x - cx) - Math.sin(angle) * (y - cy) + cx;
+                    const ry = Math.sin(angle) * (x - cx) + Math.cos(angle) * (y - cy) + cy;
+                    srcX = Math.round(cell.x + rx * (1 - localInf) + srcX * localInf / (cell.x + x || 1) * (cell.x + x));
+
+                    // Simpler: just use wave-displaced coords
+                    srcX = Math.max(0, Math.min(fw - 1, Math.round(cell.x + x + Math.sin(y * 0.03 + phase) * (8 + state.level * 4) * localInf)));
+                    srcY = Math.max(0, Math.min(fh - 1, Math.round(cell.y + y + Math.cos(x * 0.03 + phase * 0.7) * (8 + state.level * 4) * localInf)));
+
+                    const srcIdx = (srcY * fw + srcX) * 4;
+
+                    // Hue shift
+                    let r = src[srcIdx] || 0;
+                    let g = src[srcIdx + 1] || 0;
+                    let b = src[srcIdx + 2] || 0;
+
+                    // Apply unique color tint per cell
+                    const hueShift = cell.hueShift;
+                    if (hueShift > 0) {
+                        r = Math.min(255, r + hueShift * 0.5);
+                        g = Math.max(0, g - hueShift * 0.3);
+                    } else {
+                        b = Math.min(255, b - hueShift * 0.5);
+                        g = Math.max(0, g + hueShift * 0.3);
+                    }
+
+                    // Active cell subtle glow
+                    if (i === state.activeCellIndex) {
+                        const glowPulse = Math.sin(time * 0.003) * 0.5 + 0.5;
+                        g = Math.min(255, g + glowPulse * 8 * localInf);
+                    }
+
+                    dst[dstIdx] = r;
+                    dst[dstIdx + 1] = g;
+                    dst[dstIdx + 2] = b;
+                    dst[dstIdx + 3] = 255;
+                }
+            }
+
+            offCtx.putImageData(cellImgData, 0, 0);
+            ctx.drawImage(offCanvas, cell.x, cell.y);
+
+            // Cell border
+            ctx.strokeStyle = `rgba(42, 255, 138, ${0.05 + (i === state.activeCellIndex ? 0.05 : 0)})`;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(cell.x + 2, cell.y + 2, cell.w - 4, cell.h - 4);
+
+            ctx.restore();
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SIGIL RENDERING
+    // ═══════════════════════════════════════════════════════════════════
+
+    function drawSigil(time) {
+        const s = state.sigil;
+        s.pulse = (Math.sin(time * 0.005) * 0.5 + 0.5);
+
+        // Distance from mouse
+        const dist = Math.sqrt((state.mouseX - s.x)**2 + (state.mouseY - s.y)**2);
+        const proximity = Math.max(0, 1 - dist / 200);
+
+        // Only visible when mouse is near
+        if (proximity < 0.05) return;
+
+        const alpha = proximity * 0.3 * (0.5 + s.pulse * 0.5);
+        const r = s.radius * (1 + s.pulse * 0.3);
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+
+        // Outer glow
+        const grd = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r * 3);
+        grd.addColorStop(0, `rgba(42, 255, 138, ${alpha * 0.5})`);
+        grd.addColorStop(0.5, `rgba(74, 42, 255, ${alpha * 0.3})`);
+        grd.addColorStop(1, 'transparent');
+        ctx.fillStyle = grd;
+        ctx.fillRect(s.x - r * 3, s.y - r * 3, r * 6, r * 6);
+
+        // Inner sigil symbol
+        ctx.strokeStyle = `rgba(42, 255, 138, ${alpha})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2 + time * 0.001;
+            const px = s.x + Math.cos(angle) * r;
+            const py = s.y + Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+
+        ctx.restore();
+
+        // Update cursor state
+        if (dist < s.radius * 2) {
+            cursorEl.classList.add('near-sigil');
+        } else {
+            cursorEl.classList.remove('near-sigil');
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // LEVEL TRANSITION
+    // ═══════════════════════════════════════════════════════════════════
+
+    async function descendToNextLevel() {
+        state.sigilFound = true;
+        triggerImpact();
+
+        // Show transition
+        const transition = document.getElementById('transition');
+        const transText = document.getElementById('transitionText');
+        const romanNumerals = ['I','II','III','IV','V','VI','VII','VIII','IX','X',
+                               'XI','XII','XIII','XIV','XV','XVI','XVII','XVIII','XIX','XX'];
+
+        state.level++;
+        transText.textContent = `PROFUNDIDAD ${romanNumerals[state.level - 1] || state.level}`;
+        transition.classList.add('active');
+
+        await new Promise(r => setTimeout(r, 1500));
+
+        // Decide phase
+        if (state.level === 1) {
+            state.phase = 'singular';
+            generateSigil();
+        } else {
+            state.phase = 'prismatic';
+            generatePrismaticCells();
+        }
+
+        // Update HUD
+        document.getElementById('hudLevel').textContent = romanNumerals[state.level - 1] || state.level;
+        document.getElementById('hudDepth').textContent = `profundidad: ${state.level}`;
+        document.getElementById('hudMode').textContent = state.phase === 'singular' ? 'fase: singular' : `fase: prism\u00e1tica (${state.prismaticCells.length} fragmentos)`;
+
+        // Increase base distortion with level
+        state.intensity = Math.min(1, 0.3 + state.level * 0.08);
+        state.melt = Math.min(1, 0.2 + state.level * 0.06);
+        state.glitch = Math.min(1, 0.1 + state.level * 0.05);
+
+        transition.classList.remove('active');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // MOUSE & CLICK
+    // ═══════════════════════════════════════════════════════════════════
+
+    document.addEventListener('mousemove', (e) => {
+        state.prevMouseX = state.mouseX;
+        state.prevMouseY = state.mouseY;
+        state.mouseX = e.clientX;
+        state.mouseY = e.clientY;
+        state.mouseVX = state.mouseX - state.prevMouseX;
+        state.mouseVY = state.mouseY - state.prevMouseY;
+        state.mouseActive = true;
+        state.totalDistance += Math.sqrt(state.mouseVX**2 + state.mouseVY**2);
+
+        // Custom cursor
+        cursorEl.style.left = (e.clientX - 10) + 'px';
+        cursorEl.style.top = (e.clientY - 10) + 'px';
+    });
+
+    canvas.addEventListener('click', (e) => {
+        if (state.sigilFound || state.phase === 'intro') return;
+
+        state.totalClicks++;
+        const dist = Math.sqrt((e.clientX - state.sigil.x)**2 + (e.clientY - state.sigil.y)**2);
+
+        if (dist < state.sigil.radius * 2.5) {
+            descendToNextLevel();
+        } else {
+            // Wrong click — audio punishment
+            triggerImpact();
+        }
+    });
+
+    // Touch support
+    document.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        state.prevMouseX = state.mouseX;
+        state.prevMouseY = state.mouseY;
+        state.mouseX = touch.clientX;
+        state.mouseY = touch.clientY;
+        state.mouseVX = state.mouseX - state.prevMouseX;
+        state.mouseVY = state.mouseY - state.prevMouseY;
+        state.mouseActive = true;
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+        if (state.sigilFound || state.phase === 'intro') return;
+        state.totalClicks++;
+        const dist = Math.sqrt((state.mouseX - state.sigil.x)**2 + (state.mouseY - state.sigil.y)**2);
+        if (dist < state.sigil.radius * 2.5) {
+            descendToNextLevel();
+        } else {
+            triggerImpact();
+        }
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // UI
+    // ═══════════════════════════════════════════════════════════════════
+
+    function updateUIParam(name, value) {
+        const v = parseFloat(value);
+        document.getElementById('p' + name.charAt(0).toUpperCase() + name.slice(1) + '-v').textContent = value;
+
+        switch(name) {
+            case 'intensity': state.intensity = v / 100; break;
+            case 'melt': state.melt = v / 100; break;
+            case 'glitch': state.glitch = v / 100; break;
+            case 'chromatic': state.chromatic = v / 100; break;
+            case 'theremin': state.thereminVol = v / 100; break;
+            case 'metallic': state.metallicVol = v / 100; break;
+            case 'drone': state.droneVol = v / 100; break;
+            case 'seed':
+                state.seed = v;
+                generateSigil();
+                break;
+        }
+    }
+
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('open');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // MAIN RENDER LOOP
+    // ═══════════════════════════════════════════════════════════════════
+
+    function render() {
+        if (!state.running) return;
+        state.time = performance.now();
+
+        // Draw camera
+        drawCameraFrame();
+
+        // Apply distortion based on phase
+        if (state.phase === 'singular') {
+            applySingularDistortion(state.time);
+        } else if (state.phase === 'prismatic') {
+            // For prismatic, we need the base frame first
+            const baseFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+            // Apply singular distortion first (base effect)
+            applySingularDistortion(state.time);
+
+            // Then split into prismatic cells
+            applyPrismaticDistortion(state.time);
+        }
+
+        // Draw sigil
+        if (!state.sigilFound) {
+            drawSigil(state.time);
+        }
+
+        // Scanline overlay
+        ctx.save();
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+        for (let y = 0; y < canvas.height; y += 3) {
+            ctx.fillRect(0, y, canvas.width, 1);
+        }
+        ctx.restore();
+
+        // Update audio
+        updateAudio();
+
+        requestAnimationFrame(render);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ENTRY POINT
+    // ═══════════════════════════════════════════════════════════════════
+
+    document.getElementById('enterBtn').addEventListener('click', async () => {
+        // Init audio (requires user gesture)
+        initAudio();
+
+        // Init camera
+        await initCamera();
+
+        // Setup first level
+        state.phase = 'singular';
+        state.level = 0;
+        generateSigil();
+
+        // Show main
+        document.getElementById('intro').classList.add('fade-out');
+        document.getElementById('main-container').classList.add('active');
+
+        setTimeout(() => {
+            document.getElementById('intro').style.display = 'none';
+        }, 1500);
+
+        state.running = true;
+        descendToNextLevel();
+    });
+
+    </script>
+</body>
+</html>
