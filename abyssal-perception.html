@@ -369,21 +369,26 @@ let aSmooth = { sp: 0, eroLocal: 0, eroTotal: 0, acc: 0 };
 let audioUnlocked = false;
 
 // ─── iOS/Safari audio unlock ───
-// Must play a real buffer inside a user gesture to unlock WebAudio
-async function unlockAudioiOS() {
+// MUST be 100% synchronous inside a user gesture — zero awaits
+function unlockAudioiOS() {
     if (!AC) return;
-    if (AC.state === 'suspended') {
-        try { await AC.resume(); } catch(e) {}
-    }
-    // Play a tiny silent buffer — this is the iOS unlock trick
+    // Synchronous resume (returns promise but we don't await it)
+    if (AC.state === 'suspended') AC.resume();
+    // Play a tiny silent buffer — this is THE iOS unlock trick
     try {
         const silentBuf = AC.createBuffer(1, 1, AC.sampleRate);
         const src = AC.createBufferSource();
         src.buffer = silentBuf;
         src.connect(AC.destination);
         src.start(0);
-        src.onended = () => { audioUnlocked = true; };
-        // Also schedule a gain ramp to force the graph active
+        // Also play an audible blip to force the audio path open
+        const blip = AC.createOscillator();
+        const blipG = AC.createGain();
+        blipG.gain.setValueAtTime(0.001, AC.currentTime);
+        blipG.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + 0.05);
+        blip.connect(blipG); blipG.connect(AC.destination);
+        blip.start(0); blip.stop(AC.currentTime + 0.05);
+        // Force a gain ramp to activate the audio graph
         mG.gain.setValueAtTime(mG.gain.value, AC.currentTime);
     } catch(e) {}
     audioUnlocked = true;
@@ -1107,12 +1112,31 @@ document.addEventListener('mouseup', handleUp);
 cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.addEventListener('click', handleTap);
 
-// ─── Touch events (prevent ALL default to avoid scroll/zoom/pull-to-refresh) ───
+// ─── Touch events ───
+// CRITICAL: Only preventDefault when game is running (S.run)
+// Otherwise the intro button won't receive touch events on iOS
 let touchTapStart = 0;
 let touchMoved = false;
 
 document.addEventListener('touchstart', e => {
+    // Don't block touches on intro screen
+    if (!S.run) return;
     e.preventDefault();
+    resumeAudio();
+
+    // Multi-touch: pinch = distortion burst
+    if (e.touches.length >= 2) {
+        S.shake = Math.min(1, S.shake + .5);
+        triggerImpact();
+        const t1 = e.touches[0], t2 = e.touches[1];
+        const mx = (t1.clientX + t2.clientX) / 2;
+        const my = (t1.clientY + t2.clientY) / 2;
+        const dist = Math.sqrt((t1.clientX - t2.clientX) ** 2 + (t1.clientY - t2.clientY) ** 2);
+        erode(mx, my, dist * .6, .15);
+        smudge(mx, my, (t2.clientX - t1.clientX) * .5, (t2.clientY - t1.clientY) * .5, dist * .5, .6);
+        return;
+    }
+
     const t = e.touches[0];
     handleDown(t.clientX, t.clientY);
     touchTapStart = performance.now();
@@ -1120,6 +1144,7 @@ document.addEventListener('touchstart', e => {
 }, { passive: false });
 
 document.addEventListener('touchmove', e => {
+    if (!S.run) return;
     e.preventDefault();
     const t = e.touches[0];
     handleMove(t.clientX, t.clientY);
@@ -1127,6 +1152,7 @@ document.addEventListener('touchmove', e => {
 }, { passive: false });
 
 document.addEventListener('touchend', e => {
+    if (!S.run) return;
     e.preventDefault();
     handleUp();
     // Short tap (< 300ms, minimal movement) = tap to check sigil
@@ -1134,22 +1160,6 @@ document.addEventListener('touchend', e => {
     if (elapsed < 300 && !touchMoved) handleTap();
     // Long press that moved = dig + impact feedback
     else if (touchMoved) { triggerImpact(); S.shake = Math.min(1, S.shake + .15); }
-}, { passive: false });
-
-// ─── Multi-touch: pinch = extra distortion burst ───
-document.addEventListener('touchstart', e => {
-    if (e.touches.length >= 2) {
-        resumeAudio();
-        S.shake = Math.min(1, S.shake + .5);
-        triggerImpact();
-        // Erode a large area between the two fingers
-        const t1 = e.touches[0], t2 = e.touches[1];
-        const mx = (t1.clientX + t2.clientX) / 2;
-        const my = (t1.clientY + t2.clientY) / 2;
-        const dist = Math.sqrt((t1.clientX - t2.clientX) ** 2 + (t1.clientY - t2.clientY) ** 2);
-        erode(mx, my, dist * .6, .15);
-        smudge(mx, my, (t2.clientX - t1.clientX) * .5, (t2.clientY - t1.clientY) * .5, dist * .5, .6);
-    }
 }, { passive: false });
 
 // ═══════════════════════════════════════════════════════════════
@@ -1223,16 +1233,15 @@ window.addEventListener('load', async ()=>{
     }
 });
 
-async function startExperience() {
+function startExperience() {
     // Prevent double start
     if (S.run) return;
 
-    // Init audio inside user gesture (critical for iOS)
-    initAudio();
-    // Force resume + unlock (must happen synchronously in gesture handler)
-    await unlockAudioiOS();
-
-    try { await initCam(); } catch(e) { S.cam = false; }
+    // ──── SYNCHRONOUS BLOCK (iOS user gesture chain) ────
+    // AudioContext creation + unlock MUST happen here, zero awaits
+    initAudio();          // creates AC, all nodes, starts oscillators
+    unlockAudioiOS();     // plays silent buffer + blip to unlock iOS
+    // ──── END SYNC BLOCK ────
 
     S.lvl = 0; S.seed = Date.now() % 99999;
     S.scene = generateScene(0);
@@ -1246,14 +1255,22 @@ async function startExperience() {
     // Hide custom cursor on touch devices (finger is the cursor)
     if (isTouch) cur.style.display = 'none';
 
-    S.run = true; render(); nextLevel();
+    S.run = true;
+    render();
+    nextLevel();
+
+    // Camera init is async but happens AFTER audio is already unlocked
+    initCam().catch(() => { S.cam = false; });
 }
 
-// Both click AND touchend to cover all devices
-document.getElementById('enterBtn').addEventListener('click', startExperience);
-document.getElementById('enterBtn').addEventListener('touchend', e => {
+// ─── Entry: both click AND touchend for all devices ───
+const enterBtn = document.getElementById('enterBtn');
+enterBtn.addEventListener('click', e => {
     e.preventDefault();
-    e.stopPropagation();
+    startExperience();
+});
+enterBtn.addEventListener('touchend', e => {
+    e.preventDefault();
     startExperience();
 });
 
